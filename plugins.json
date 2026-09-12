@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "plugins": [
+    {
+      "id": "asr",
+      "path": "plugins/asr",
+      "status": "planned",
+      "upstream_issue": "https://github.com/penhin/penhin-code/issues/25"
+    }
+  ]
+}
