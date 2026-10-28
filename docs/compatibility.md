@@ -39,3 +39,16 @@
 ## 兼容性证据
 
 每次插件发行都应记录实际验证过的核心版本及提交、manifest / host / result schema 版本、操作系统与架构、引擎和模型版本，以及跨仓库端到端测试结果。初始化阶段的接口版本不等于对所有核心版本的兼容承诺。
+
+## 媒体理解 0.1.0
+
+对接 Penhin 提交 [`690818c9e2fd201fd87333b0ff92775ae0c59c08`](https://github.com/penhin/penhin/tree/690818c9e2fd201fd87333b0ff92775ae0c59c08)，包版本 `0.1.1`，独立包为 `penhin-plugin-media-understanding`，入口名 `media_understanding`，使用 `Plugin`、`PluginRuntime`、可选工具和宿主请求投影。需求仍来自 [penhin-code#41](https://github.com/penhin/penhin-code/issues/41)，实现不依赖旧版 broker 协议。
+
+- 实测环境：Windows x64、Python 3.12。包要求 Python 3.12+，与 PyAV 19 要求一致；Linux / Python 3.12 已配置独立 CI，本轮未在本地执行 Linux。
+- 本地解码：Pillow `13.0.0`、pypdfium2 `5.14.0`、PyAV `19.0.2`；可选本机 Ollama HTTP 接口使用 HTTPX `0.28.1`。来源、许可及完整依赖锁见[媒体插件说明](../plugins/media_understanding/README.md)。
+- 源码环境和全新 wheel 环境均 **53 passed, 1 skipped**。覆盖真实 PNG、PDF 原生文字/页序、MP4/WebM 采样帧、损坏/超限输入、来源匹配、首次启用回调、整批失败、取消/重复取消/超时、启动中取消、子进程回收、HTTP 错误脱敏和响应上限、真实内核 entry point/Agent/停用清理。
+- 独立环境安装 `requirements-local.lock` 时启用 `--require-hashes`；wheel 在仓库之外运行测试，`pip check` 无冲突。wheel/sdist 构建、Ruff lint/format、仓库目录/文档检查通过，sdist 含测试 fixtures 和依赖锁。
+- 本次 wheel SHA-256：`4e58df840e91e01de23a18bfd16aef868d6859067e14f5df1a17ef0e9fa0b830`。这是当前未提交源码构建的本地校验值，非签名发行。
+- 未配置真实视觉模型，因此跳过真实模型 smoke；HTTP 合同使用替身，不代表语义识别质量已经验证。模型权重及 Ollama 守护进程由宿主选择并管理。
+
+插件提供 `prepare_fallback` 的启用 gate 和失败传播；持久化项目启用 UI、安装验证/授权、附件存储、原始媒体直传与受限重试仍须宿主接入。不能以插件单测和 wheel 安装通过为由关闭 #41。

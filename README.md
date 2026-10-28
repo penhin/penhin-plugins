@@ -1,12 +1,15 @@
-# Penhin Code Plugins
+# Penhin Plugins
+
+> 媒体理解开发版面向 [Penhin](https://github.com/penhin/penhin) 的 Python Plugin 接口，需求来自 [penhin-code#41](https://github.com/penhin/penhin-code/issues/41)。安装、宿主回退与后端配置见[媒体理解说明](plugins/media_understanding/README.md)。下文 ASR 与旧版安装器说明保留为已有规划背景，不代表媒体插件接口。
 
 为 [Penhin Code](https://github.com/penhin/penhin-code) 交付官方 Plugin 的独立仓库。多个插件共享维护和构建约定，每个插件独立版本、独立构建、独立签名和发行。
 
-当前仓库处于初始化阶段，尚无可安装的官方 Plugin Artifact。首个插件为 ASR，端到端交付由 [penhin-code#25](https://github.com/penhin/penhin-code/issues/25) 跟踪。
+当前尚无已发行的官方 Plugin Artifact。首个插件为 ASR，端到端交付由 [penhin-code#25](https://github.com/penhin/penhin-code/issues/25) 跟踪。
 
 | 插件 | 用途 | 状态 |
 | --- | --- | --- |
 | [asr](plugins/asr/README.md) | 将核心提供的音频 Attachment 转写为文本，供用户编辑后提交 | 规划中，未发行 |
+| [媒体理解](plugins/media_understanding/README.md) | 图片、PDF 页面、视频采样帧的本地理解；输出带来源的不可信上下文补充 | 开发中，已有服务、解码器、可替换视觉后端与 Penhin 适配，未发布 |
 
 ## 职责
 

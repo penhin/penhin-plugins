@@ -6,6 +6,12 @@
       "path": "plugins/asr",
       "status": "planned",
       "upstream_issue": "https://github.com/penhin/penhin-code/issues/25"
+    },
+    {
+      "id": "media_understanding",
+      "path": "plugins/media_understanding",
+      "status": "in-development",
+      "upstream_issue": "https://github.com/penhin/penhin-code/issues/41"
     }
   ]
 }

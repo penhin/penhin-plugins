@@ -1,0 +1,3 @@
+include requirements-local.lock
+include THIRD_PARTY.md
+recursive-include tests *.py

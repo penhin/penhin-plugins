@@ -30,3 +30,7 @@
 发行后提供具体的 Release 下载链接和经过验证的完整命令。当前核心接受解压后的本地 Artifact 目录，随后可分别执行验证安装、授权和激活，也支持 `/plugin add` 合并这些步骤。
 
 不要将本仓库 Git URL、未构建源码目录或 ZIP URL 写成当前即可使用的 ASR 安装命令。更新还需验证新 Artifact，重新检查授权要求，并通过核心的 reload 流程切换；禁用和退出应停止在途工作。
+
+## Penhin 媒体理解插件
+
+媒体理解插件独立构建：`python -m build plugins/media_understanding`。先用其 `requirements-local.lock` 安装有摘要的运行依赖，再安装 wheel；具体后端/模型来源见[媒体依赖说明](../plugins/media_understanding/THIRD_PARTY.md)。模型由宿主显式准备，插件不隐式下载。媒体理解的发布门槛还包括 [#41](https://github.com/penhin/penhin-code/issues/41) 要求的首次启用、失败阻断，以及宿主原始媒体路由验收。
