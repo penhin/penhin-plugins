@@ -2,6 +2,12 @@
   "schema_version": 1,
   "plugins": [
     {
+      "id": "tts",
+      "path": "plugins/tts",
+      "status": "in-development",
+      "request": "Chinese-first TTS with complete and incremental text, segmented playback, interruption and ASR composition"
+    },
+    {
       "id": "asr",
       "path": "plugins/asr",
       "status": "in-development",

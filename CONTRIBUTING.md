@@ -25,6 +25,7 @@ python scripts/check_repository.py
 媒体理解使用同一布局，开发命令见[媒体理解验证说明](plugins/media_understanding/README.md#验证)。两个插件的测试分别运行，避免跨插件测试模块同名冲突。模型推理测试必须显式配置本地模型；基础 CI 不自动下载或启动模型。
 
 1. 在 `plugins/<id>/` 建立包与 README，在 `plugins.json` 登记，ID 使用小写字母、数字、下划线。
+   需求来源填写 `upstream_issue`；直接用户需求尚无 issue 时填写明确的 `request`，不要编造 issue 链接。
 2. 状态使用 `planned`、`in-development` 或 `released`；进入实现阶段需有 `pyproject.toml`，声明 `penhin.plugins` 入口。
 3. 分开说明宿主直接调用、Agent 工具调用和宿主交互职责。输入输出与权限边界需要有行为测试，尤其取消、超时和资源所有权。
 4. 原生运行时和模型必须记录来源、固定版本、摘要和许可。模型和个人音频不提交，推理阶段不隐式下载。
@@ -40,3 +41,5 @@ python -m piptools compile plugins/asr/pyproject.toml --extra zipformer --genera
 ```
 
 锁文件包含平台 wheel 的摘要；当前实测平台与 Python 版本必须单独记录，不能仅据锁文件声称所有平台已验证。
+
+TTS 使用独立的 `plugins/tts/tests` 和 CI。安装 `./plugins/tts[melo,playback,dev]` 后设置 `PENHIN_TTS_MODEL_DIR` 可执行真实合成测试；组合测试还可设置 `PENHIN_ASR_MODEL_DIR`。更新 `requirements-melo.lock` 时使用 `piptools compile plugins/tts/pyproject.toml --extra melo --extra playback --generate-hashes --strip-extras --no-header --no-annotate --output-file plugins/tts/requirements-melo.lock`。设备输出合同替身不替代实际声卡/麦克风交互验收。

@@ -4,6 +4,7 @@
 
 | 插件 | 能力 | 状态 |
 | --- | --- | --- |
+| [TTS](plugins/tts/README.md) | 中文离线合成，完整/流式文本、分段播放、打断与 ASR 组合 | 开发中，已有服务、播放器、CLI 与 Penhin 适配，未发布 |
 | [ASR](plugins/asr/README.md) | Zipformer 中文离线转写，支持流式与整段 | 开发中，已有服务、CLI 与 Penhin 适配，未发布 |
 | [媒体理解](plugins/media_understanding/README.md) | 图片、PDF 页面、视频采样帧的本地理解；输出带来源的不可信上下文补充 | 开发中，已有服务、解码器、可替换视觉后端与 Penhin 适配，未发布 |
 
@@ -22,6 +23,8 @@ python -m penhin_asr .cache/asr/zipformer/test_wavs/0.wav --model-dir .cache/asr
 宿主可选择“转为文字后编辑提交”或“直接交付语音”：后者通过 `prepare_voice()` 在内部转写，向模型发送文字，界面仍展示语音消息。插件提供识别与提交准备，录音、附件权限、交付方式设置和实际模型调用由宿主负责。后续 TTS 可接在模型回复之后；完整语音交互仍需宿主接入。
 
 ## 开发与交付
+
+TTS 使用 MeloTTS + sherpa-onnx，支持回答逐段朗读；安装、打断与 ASR → Agent → TTS 接入见 [TTS 使用说明](plugins/tts/README.md)。
 
 媒体理解的安装、宿主提交前回退和可选 Ollama 后端见 [媒体理解说明](plugins/media_understanding/README.md)。插件面向当前 Penhin；产品验收来源仍是 `penhin-code` 的 [#41](https://github.com/penhin/penhin-code/issues/41) 和 [#42](https://github.com/penhin/penhin-code/issues/42)。
 

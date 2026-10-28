@@ -53,9 +53,12 @@ def check(root: Path) -> list[str]:
         status = entry.get("status")
         if not isinstance(status, str) or status not in STATUSES:
             errors.append(f"{plugin_id}: invalid status")
-        issue = entry.get("upstream_issue", "")
-        if not isinstance(issue, str) or not re.fullmatch(r"https://github\.com/penhin/[A-Za-z0-9_.-]+/issues/[1-9][0-9]*", issue):
-            errors.append(f"{plugin_id}: upstream_issue must reference a penhin repository issue")
+        issue = entry.get("upstream_issue")
+        if issue is not None:
+            if not isinstance(issue, str) or not re.fullmatch(r"https://github\.com/penhin/[A-Za-z0-9_.-]+/issues/[1-9][0-9]*", issue):
+                errors.append(f"{plugin_id}: upstream_issue must reference a penhin repository issue")
+        elif not isinstance(entry.get("request"), str) or not entry["request"].strip():
+            errors.append(f"{plugin_id}: an upstream_issue or explicit request is required")
         plugin_root = root / expected_path
         readme = plugin_root / "README.md"
         if not readme.is_file():

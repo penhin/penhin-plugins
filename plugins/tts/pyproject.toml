@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "penhin-plugin-tts"
+version = "0.1.0"
+description = "Offline Chinese speech synthesis, interruptible playback and voice interaction"
+requires-python = ">=3.11"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = []
+
+[project.optional-dependencies]
+melo = ["sherpa-onnx==2.0.1", "numpy==2.3.5"]
+playback = ["sounddevice==0.5.3"]
+dev = ["pytest>=8,<10", "pytest-asyncio>=0.24,<2", "ruff>=0.11,<1", "build>=1.2,<2"]
+
+[project.entry-points."penhin.plugins"]
+tts = "penhin_tts:create_plugin"
+
+[project.scripts]
+penhin-tts = "penhin_tts.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+penhin_tts = ["py.typed", "model-lock.json"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+markers = ["integration: requires the real Penhin core", "model: requires the downloaded MeloTTS model"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
