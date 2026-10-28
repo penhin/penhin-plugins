@@ -18,6 +18,12 @@
       "path": "plugins/media_understanding",
       "status": "in-development",
       "upstream_issue": "https://github.com/penhin/penhin-code/issues/41"
+    },
+    {
+      "id": "knowledge_retrieval",
+      "path": "plugins/knowledge_retrieval",
+      "status": "in-development",
+      "request": "Index project documents, notes, transcripts and media understanding results; retrieve original excerpts by question with source citations"
     }
   ]
 }

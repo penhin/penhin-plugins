@@ -7,6 +7,7 @@
 | [TTS](plugins/tts/README.md) | 中文离线合成，完整/流式文本、分段播放、打断与 ASR 组合 | 开发中，已有服务、播放器、CLI 与 Penhin 适配，未发布 |
 | [ASR](plugins/asr/README.md) | Zipformer 中文离线转写，支持流式与整段 | 开发中，已有服务、CLI 与 Penhin 适配，未发布 |
 | [媒体理解](plugins/media_understanding/README.md) | 图片、PDF 页面、视频采样帧的本地理解；输出带来源的不可信上下文补充 | 开发中，已有服务、解码器、可替换视觉后端与 Penhin 适配，未发布 |
+| [知识检索](plugins/knowledge_retrieval/README.md) | 本地索引项目文档、笔记、转写与媒体理解结果；按问题找回原文片段和来源引用 | 开发中，已有持久化索引、检索、引用取回与 Penhin 适配，未发布 |
 
 ## 开始使用 ASR
 
@@ -29,6 +30,8 @@ TTS 使用 MeloTTS + sherpa-onnx，支持回答逐段朗读；安装、打断与
 媒体理解的安装、宿主提交前回退和可选 Ollama 后端见 [媒体理解说明](plugins/media_understanding/README.md)。插件面向当前 Penhin；产品验收来源仍是 `penhin-code` 的 [#41](https://github.com/penhin/penhin-code/issues/41) 和 [#42](https://github.com/penhin/penhin-code/issues/42)。
 
 每个插件在 `plugins/<id>/` 内独立维护 Python 包、测试、模型锁与版本。根 `plugins.json` 是仓库目录元数据，不是安装 manifest。
+
+知识检索使用本地 SQLite，无需模型或网络；可接收 ASR 最终转写与媒体理解结果，返回带行号、页码或时间位置的原文片段。安装和可运行示例见[知识检索说明](plugins/knowledge_retrieval/README.md)。
 
 - [参与开发](CONTRIBUTING.md)
 - [兼容性与验证记录](docs/compatibility.md)

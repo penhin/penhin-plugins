@@ -22,6 +22,8 @@ python scripts/check_repository.py
 
 ## 添加插件
 
+知识检索开发使用 `python -m pip install -e "./plugins/knowledge_retrieval[dev]"`，测试入口为 `python -m pytest plugins/knowledge_retrieval/tests -q`。基础服务无需模型或其他插件；跨插件合同测试需另行安装当前 ASR 和媒体理解基础包，Penhin 集成需真实内核。详细索引、引用和权限约定见[知识检索说明](plugins/knowledge_retrieval/README.md)。
+
 媒体理解使用同一布局，开发命令见[媒体理解验证说明](plugins/media_understanding/README.md#验证)。两个插件的测试分别运行，避免跨插件测试模块同名冲突。模型推理测试必须显式配置本地模型；基础 CI 不自动下载或启动模型。
 
 1. 在 `plugins/<id>/` 建立包与 README，在 `plugins.json` 登记，ID 使用小写字母、数字、下划线。

@@ -2,6 +2,19 @@
 
 核对日期：2026-10-28。当前 ASR `0.1.0` 为开发版本，未发布。
 
+## 知识检索 0.1.0
+
+新增 `penhin-plugin-knowledge-retrieval`，需求来自用户提出的“索引项目文档、笔记、转写和媒体理解结果，按问题找回原文并引用来源”。使用与下文相同的 Penhin `690818c9` / `0.1.1` 基线，入口名 `knowledge_retrieval`。服务无第三方运行依赖，插件工厂延迟导入内核。
+
+- 本地实测 Windows x64、Python 3.12.10、SQLite 3.49.1；包要求 Python 3.11+。Ubuntu / 3.11 与 Windows / 3.12 已配置独立 CI，本轮未在本地执行 Linux 或 Python 3.11。
+- `python -m pytest plugins/knowledge_retrieval/tests -q`：**42 passed**，其中 34 项服务测试、8 项真实 Penhin / 跨插件集成测试，无跳过。Provider 是确定性替身，无付费模型请求。
+- 真实 SQLite 覆盖中英文问题、混合词项、空结果、逐字片段、Unicode / CRLF 定位、持久化重开、来源更新与删除、幂等导入、批量失败回滚、输出预算、项目与来源过滤、授权撤销、非法数据库拒绝，以及取消、重复取消、超时和关闭时的线程回收。
+- 真实内核覆盖 entry point 发现、Agent 搜索调用、结构化引用返回、fetch 重新授权、默认工具关闭和共享服务所有权；直接复用当前 `penhin_asr.Transcript` 与 `penhin_media.ContextSupplement` 验证跨插件输入。
+- wheel / sdist 构建通过。源码目录之外的干净 Python 3.12 环境安装当前 wheel 后，**34 passed, 1 skipped**；跳过项为未安装 Penhin 的集成模块。独立示例完成四类来源索引、问题检索及原文取回；entry point 与 `pip check` 通过。
+- Ruff lint / format、仓库目录与文档链接检查通过。本轮未发布 wheel 的 SHA-256 为 `1c3e7730f833d75e44fd00604ea89b30a4bfc1b6cbbe969657fd8f7774b23123`，不是发行签名。
+
+当前检索是中文双字 / 英文词项的 FTS5 BM25，没有向量语义召回或答案生成。引用定位到导入时快照；ASR 整段时长不会伪装成词级对齐，媒体生成描述与原生提取文字保持区别。大规模质量／性能、目录自动同步、宿主引用 UI、安装授权和端到端回答引用校验尚未验收。完整合同见[知识检索说明](../plugins/knowledge_retrieval/README.md)。
+
 ## Penhin 基线
 
 本轮对接 `penhin/penhin` 提交 [`690818c9e2fd201fd87333b0ff92775ae0c59c08`](https://github.com/penhin/penhin/tree/690818c9e2fd201fd87333b0ff92775ae0c59c08)，包版本 `0.1.1`。验证时从干净的该提交本地源码构建并安装，没有修改内核。

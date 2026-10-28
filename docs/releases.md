@@ -1,5 +1,7 @@
 # 按插件发行
 
+知识检索 `0.1.0` 为开发版本，尚未发布。独立构建命令为 `python -m build plugins/knowledge_retrieval`；wheel 只含服务、数据合同及 Penhin 适配，sdist 另含测试和可运行示例，不包含索引数据库、个人文档、模型或权重。基础运行仅依赖 Python 自带 SQLite FTS5，Penhin 由宿主单独安装。发布前需验证索引增删改、引用版本与位置、权限过滤、取消回滚和宿主引用展示；基础测试不替代真实语料质量评估。安装与使用见[知识检索 README](../plugins/knowledge_retrieval/README.md)，本地构建摘要与环境见[兼容性记录](compatibility.md)。
+
 TTS `0.1.0` 为开发版本，尚未发布。`penhin-plugin-tts` 的 wheel 仅包含代码与模型锁；sdist 另含测试、Penhin 语音接入示例与 `requirements-melo.lock`。安装 `[melo]` 启用合成，`[playback]` 启用本机声卡输出；模型通过显式下载命令单独准备，下载时保存上游 MIT LICENSE 和来源记录。发布验收需分别完成基础合同测试、真实 Penhin、真实中文模型、ASR 组合及目标设备播放/打断验证，不能把 CI 通过等同于完整语音客户端交付。使用说明见 [TTS README](../plugins/tts/README.md)。
 
 每个插件独立版本、独立 wheel / sdist，标签采用 `<id>/v<version>`。当前没有发布标签、上传 Release 或签名发行；ASR `0.1.0` 仍为开发状态。
