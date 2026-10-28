@@ -1,48 +1,50 @@
-# 核心兼容性与集成前置工作
+# 兼容性与验证记录
 
-本页记录初始化时对 `penhin/penhin-code` 的源码核对，不是已通过的兼容性认证。
+核对日期：2026-10-28。当前 ASR `0.1.0` 为开发版本，未发布。
 
-- 核对日期：2026-09-12。
-- 核心提交：[`f6e609ae19d6e14488063a6bc3d6354c10558e01`](https://github.com/penhin/penhin-code/tree/f6e609ae19d6e14488063a6bc3d6354c10558e01)。
-- 接口基线：Plugin manifest `api_version: 1`；宿主 `PROTOCOL_VERSION = 1`。
-- [#21](https://github.com/penhin/penhin-code/issues/21)、[#22](https://github.com/penhin/penhin-code/issues/22)、[#23](https://github.com/penhin/penhin-code/issues/23) 已关闭；[#25](https://github.com/penhin/penhin-code/issues/25) 仍未完成。
+## Penhin 基线
 
-## 可沿用的合同
+本轮对接 `penhin/penhin` 提交 [`690818c9e2fd201fd87333b0ff92775ae0c59c08`](https://github.com/penhin/penhin/tree/690818c9e2fd201fd87333b0ff92775ae0c59c08)，包版本 `0.1.1`。验证时从干净的该提交本地源码构建并安装，没有修改内核。
 
-[`penhin/plugins/host.py`](https://github.com/penhin/penhin-code/blob/f6e609ae19d6e14488063a6bc3d6354c10558e01/penhin/plugins/host.py) 已定义 `Invocation`、`AttachmentDescriptor`、`AttachmentBroker`、`HostProgress`、`HostDiagnostic`、`HostResult`，以及 `PluginHost.invoke/cancel/close`。
+使用公开的 `Plugin`、`Tool.from_model`、`ToolContext`、`ToolResult`、`PluginRuntime`、`load_plugin` 和 `penhin.plugins` entry point。旧方案中的 `penhin-plugin.yaml` / `PluginHost` 合同不适用于此内核；历史背景见[调研](research/penhin-plugin-issues-2026-10-28.md)。
 
-元数据通过 JSON 兼容结构传递。音频内容由 broker 按 invocation 和 attachment 身份读取，不在 JSON 中嵌入大段音频，也不传递宿主文件路径。插件不得绕过 Attachment Session 的失效和取消语义。
+服务包不强依赖 Penhin，独立使用无需安装内核；调用插件工厂时才导入 Penhin。当前内核为私有源码仓库，尚未在 PyPI 找到可安装发行，接入者须单独提供匹配内核。基础 CI 不具备该私有仓库访问权限时明确跳过集成模块；本地交付验证必须覆盖真实内核。
 
-## ASR 交付还需要接通的部分
+## ASR 运行边界
 
-| 当前源码事实 | 后续工作 |
-| --- | --- |
-| `service.py` 的生产加载入口目前构建工具型 `LocalPlugin`；其子进程通信尚未接通 `host.py` 的输入宿主合同 | 在核心实现可安装 ASR 的加载与调用通路，验证真实运行路径 |
-| `load_local_plugin()` 创建空的临时 venv，尚未恢复锁定依赖 | 实现并验证从已验证 Artifact 准备依赖、推理运行时和模型资产的流程 |
-| `HostedInputEnricher` 当前执行 `input.enrich` 并返回上下文补充；没有 ASR 最终文本写入编辑器的专用通路 | 核心明确转写操作、结果 schema 和编辑器回填接口；部分结果仅展示，最终结果等待用户编辑和提交 |
-| `PythonSdkHost` 在进程内调用 handler；`cancel()` 记录 ID，但不能中断已进入的 handler | 接通实际隔离宿主，验证识别中的取消、超时与进程回收，不能以 SDK 模拟调用证明这些能力 |
-| 核心仓库尚无 #25 的按住录音完整实现 | 核心实现录音、松开、取消、禁用、reload 和会话退出时的生命周期，并拒绝迟到结果 |
-| Git source 解析会克隆整个仓库；没有子目录选择或 ZIP 解包分支 | 每个插件构建独立 Artifact。当前可行入口是下载并解压后传入本地 Artifact 目录；远程发行 URL 的直接安装需核心支持 |
+- 后端：sherpa-onnx `2.0.1`、NumPy `2.3.5`；仅 Zipformer 中文流式 int8 `2025-06-30`，文件摘要见[模型锁](../plugins/asr/src/penhin_asr/model-lock.json)。
+- 实测环境：Windows x64、Python 3.12、CPU。Linux 的无模型合同测试纳入 CI，尚未在本次本地环境执行；不宣称其他平台的真实模型识别已通过。
+- 输入：整段为单声道 PCM16 WAV；流式为异步 PCM16 字节块（每块最多 1 秒），8–48 kHz，默认累计 10 MiB / 120 秒上限。浏览器录音格式转换、录音手势和编辑器属于宿主。
+- 整段与流式共用 OnlineRecognizer；流式输出可修订的全文快照，输入 EOF 后返回唯一最终结果。没有自动静音切句，不承诺该中文模型的英文或中英混合识别质量。
+- 直接语音交付通过 `prepare_voice()` 返回分离的模型文字与语音展示数据；也可用 `VoiceSubmission.from_transcript()` 复用最终流式结果。是否显示文字由宿主选择，不改变 ASR 模型。默认插件可仅注册生命周期，传入工具 reader 时才暴露 `asr__transcribe`。
+- 每次录音独立工作进程，在会话内复用模型与解码状态；跨会话仍有冷启动。默认超时 60 秒，整段限制总执行时间，流式限制等待下一条解码结果（含等待输入和首次加载）的时间。取消或关闭后终止并等待进程退出；不提供 OS 安全隔离。
 
-加载入口见 [`service.py`](https://github.com/penhin/penhin-code/blob/f6e609ae19d6e14488063a6bc3d6354c10558e01/penhin/plugins/service.py)。安装源与完整性检查见 [`installation.py`](https://github.com/penhin/penhin-code/blob/f6e609ae19d6e14488063a6bc3d6354c10558e01/penhin/plugins/installation.py)。
+## 实际验证
 
-音频合同还须遵循当前每 Attachment 10 MiB 上限；Input Enricher 的 MIME 筛选目前支持精确匹配或 `*`，不能假定 `audio/*` 可用。相关实现见 [`input.py`](https://github.com/penhin/penhin-code/blob/f6e609ae19d6e14488063a6bc3d6354c10558e01/penhin/plugins/input.py) 和 [`runtime.py`](https://github.com/penhin/penhin-code/blob/f6e609ae19d6e14488063a6bc3d6354c10558e01/penhin/plugins/runtime.py)。
+验证覆盖 WAV 与 PCM 格式/累计大小/时长限制、并发拒绝、取消与重复取消、超时、迟到结果、共享资源所有权、工作进程创建期间取消、进程回收、输出上限、错误脱敏、流式背压、提前退出和输入结束前输出。语音提交覆盖展示数据不含文字、附件 ID 绑定、读取阶段的超时/取消/关闭、空识别阻断、复用最终结果、准备失败不调用模型且不追加 Session query。集成使用真实 Penhin 工厂、入口发现与 Agent 执行路径；模型 Provider 使用确定性替身，不调用付费 API。
 
-## 发行签名的前置修正
+真实模型使用上游压缩包中的 `0.wav`、`1.wav`、`8k.wav`，样本摘要固定在模型锁。`0.wav` 的结果与[官方示例](https://k2-fsa.github.io/sherpa/onnx/pretrained_models/online-transducer/zipformer-transducer-models.html#sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30-chinese)公布的文本一致：“对我做了介绍啊那么我想说的是呢大家如果对我的研究感兴趣呢”。这验证推理接入一致性，不是独立人工标注的准确率评测。
 
-当前 `verify_plugin_artifact()` 使用 HMAC-SHA256，官方信任根在源码中公开固定。由于 HMAC 的签名和验证使用同一密钥，这个实现不能证明 Artifact 来自官方发布者。
+三段样本分别用 20 / 320 / 100 ms 音频块处理，并在输入源 EOF 前等待首个非空结果：如果后端先缓存整个输入才识别，该测试会超时。三段流式最终文本均与整段调用一致，覆盖 8 kHz 输入。这里没有实测麦克风链路延迟；生产输入仍应允许用户编辑后提交。
 
-首个正式发行前，需要核心与本仓库共同采用非对称签名验证或等价的可信发行机制，并确定发布者身份、验证公钥和轮换规则。签名私钥只用于受控发行环境。本仓库不生成依赖公开固定 HMAC 密钥的“官方签名”。
+本轮最终验证：
 
-当前验证器还要求 `dependencies` 和 `model_assets` 都是非空的文件路径到摘要的映射。ASR 必须锁定真实使用的依赖和模型；今后无模型插件的表示方式应由核心合同明确，不能靠伪造占位模型通过检查。
+- `python -m pytest plugins/asr/tests -q`：设置真实模型目录后 **81 passed**，其中 66 项基础/语音交付/流式/进程/资产测试、11 项 Penhin 集成、4 项真实模型测试；无跳过。
+- 真实内核验证语音转写以 `user` 内容提交，系统提示保持原样，下一轮保留内部文字且不重复识别；展示数据只包含语音引用及时长。本轮只修改插件仓库，未修改 Penhin 内核或 penhin-code。
+- ASR Ruff lint / format 与 `git diff --check` 通过。仅包含本次 ASR 改动的提交快照已通过目录及本地文档链接检查；工作区并行开发的 TTS 改动不在本次提交和验证范围内。
+- wheel 与 sdist 构建通过；sdist 包含测试夹具和依赖锁。干净 Python 3.12 环境通过 `--require-hashes` 安装后端依赖，再安装 wheel，`pip check` 通过。
+- 在仓库之外、未安装 Penhin 的独立环境中重新安装当前 wheel，真实中文 `prepare_voice()` 通过：5.6115 秒样本产生 28 字内部文字，展示数据仅含 audio 类型、来源和时长，证明提交准备服务可独立使用。
+- wheel 与 sdist 均包含当前提交接口与测试，未恢复旧后端。本轮 wheel SHA-256 为 `9f445b791303aaca17dcd36d04880ab2244f6d529141ddf1fc43f50399b3aab1`；这是未发布源码的本地构建摘要，不是已发布签名。
 
-## 兼容性证据
+模型压缩包未包含权重 LICENSE，其 README 指向的上游模型卡本次无法访问（401），权重许可尚未核实。源码包与 wheel 不含权重；来源与当前许可状态保存在模型锁，不能从代码许可推断权重许可。
 
-每次插件发行都应记录实际验证过的核心版本及提交、manifest / host / result schema 版本、操作系统与架构、引擎和模型版本，以及跨仓库端到端测试结果。初始化阶段的接口版本不等于对所有核心版本的兼容承诺。
+## 仍需宿主完成的 #42 范围
+
+[penhin-code#42](https://github.com/penhin/penhin-code/issues/42) 仍要求真实按住录音、Attachment 生命周期、输入框编辑提交、安装验证与授权等宿主流程。当前 ASR 包提供可调用能力与清理合同，不能据此关闭完整交付任务。安装验证不由本包替代，`pip install` 也不等于完成宿主的授权流程。
 
 ## 媒体理解 0.1.0
 
-对接 Penhin 提交 [`690818c9e2fd201fd87333b0ff92775ae0c59c08`](https://github.com/penhin/penhin/tree/690818c9e2fd201fd87333b0ff92775ae0c59c08)，包版本 `0.1.1`，独立包为 `penhin-plugin-media-understanding`，入口名 `media_understanding`，使用 `Plugin`、`PluginRuntime`、可选工具和宿主请求投影。需求仍来自 [penhin-code#41](https://github.com/penhin/penhin-code/issues/41)，实现不依赖旧版 broker 协议。
+同样对接上述 Penhin `690818c9` / `0.1.1`，独立包为 `penhin-plugin-media-understanding`，入口名 `media_understanding`，使用 `Plugin`、`PluginRuntime`、可选工具和宿主请求投影。需求仍来自 [penhin-code#41](https://github.com/penhin/penhin-code/issues/41)，实现不依赖旧版 broker 协议。
 
 - 实测环境：Windows x64、Python 3.12。包要求 Python 3.12+，与 PyAV 19 要求一致；Linux / Python 3.12 已配置独立 CI，本轮未在本地执行 Linux。
 - 本地解码：Pillow `13.0.0`、pypdfium2 `5.14.0`、PyAV `19.0.2`；可选本机 Ollama HTTP 接口使用 HTTPX `0.28.1`。来源、许可及完整依赖锁见[媒体插件说明](../plugins/media_understanding/README.md)。

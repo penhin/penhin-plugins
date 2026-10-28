@@ -1,36 +1,25 @@
 # 按插件发行
 
-本页定义后续发行约定。当前没有自动发布工作流、生产签名或已发布 Artifact。
+每个插件独立版本、独立 wheel / sdist，标签采用 `<id>/v<version>`。当前没有发布标签、上传 Release 或签名发行；ASR `0.1.0` 仍为开发状态。
 
-## 独立版本与制品
+## 构建与安装
 
-- 每个插件独立使用语义版本，不为整个仓库绑定单一插件版本。
-- 标签采用 `<id>/v<version>`，例如 `asr/v0.1.0`；尚未发行时不创建占位标签。
-- GitHub Release 上传单个插件的 Artifact，以及校验材料、许可说明和发布记录。
-- 若运行依赖平台，分别构建并标明操作系统和架构；只有验证过的平台才列为支持。
+```sh
+python -m build plugins/asr
+python -m pip install --require-hashes -r plugins/asr/requirements-zipformer.lock
+python -m pip install --no-deps plugins/asr/dist/penhin_plugin_asr-0.1.0-py3-none-any.whl
+```
 
-安装用 Artifact 的根目录包含 `penhin-plugin.yaml`、实现及运行所需文件、实际依赖锁、实际模型资产，以及完整性记录 `penhin-artifact.json`。不将整个仓库作为一个插件安装，不把不相关插件一起打包。
+wheel 包含服务、Penhin 适配、模型下载工具和模型锁，不包含模型权重或录音。源码仓库根目录不是单个可安装插件。模型需通过显式 provisioning 命令准备，具体操作见 [ASR README](../plugins/asr/README.md)。Penhin 内核由宿主单独安装。
 
-这里的完整性记录文件名来自当前核心。最终签名字段和流程必须与核心修正后的验证合同一致，详见 [兼容性说明](compatibility.md)。
-
-## 首次发行前
-
-1. 确定 ASR 引擎、模型版本、音频合同与首发平台，完成各自许可和再分发说明。
-2. 实现插件、取消与清理，接通核心的真实加载、录音和编辑器路径。
-3. 固定直接及传递依赖、模型来源和内容摘要；运行期不下载可变版本模型或依赖。
-4. 在核心完成可信签名验证，配置受控发行签名环境。验证错误签名、内容篡改、依赖及模型不匹配会被拒绝。
-5. 在干净环境中构建单插件 Artifact，并验证解压目录能经核心的验证、安装、授权和激活流程使用。
-6. 运行 [ASR 验收清单](../plugins/asr/README.md) 的插件及跨仓库测试，记录对应核心提交；没有用户提交时模型调用数必须为零。
-7. 创建插件版本标签与 Release，更新插件 README、变更记录、目录状态和安装说明。
-
-当前基础 CI 只检查仓库结构和文档链接。插件构建、合同测试、真实模型验证和签名发行检查应在实现阶段加入。
-
-## 用户安装流程
-
-发行后提供具体的 Release 下载链接和经过验证的完整命令。当前核心接受解压后的本地 Artifact 目录，随后可分别执行验证安装、授权和激活，也支持 `/plugin add` 合并这些步骤。
-
-不要将本仓库 Git URL、未构建源码目录或 ZIP URL 写成当前即可使用的 ASR 安装命令。更新还需验证新 Artifact，重新检查授权要求，并通过核心的 reload 流程切换；禁用和退出应停止在途工作。
-
-## Penhin 媒体理解插件
+## 发布前的必要证据
 
 媒体理解插件独立构建：`python -m build plugins/media_understanding`。先用其 `requirements-local.lock` 安装有摘要的运行依赖，再安装 wheel；具体后端/模型来源见[媒体依赖说明](../plugins/media_understanding/THIRD_PARTY.md)。模型由宿主显式准备，插件不隐式下载。媒体理解的发布门槛还包括 [#41](https://github.com/penhin/penhin-code/issues/41) 要求的首次启用、失败阻断，以及宿主原始媒体路由验收。
+
+1. 在干净环境构建，并在源码目录之外验证 wheel 导入、entry point 与命令行；记录 wheel 摘要及对应源码提交。
+2. 运行基础测试、真实 Penhin 集成及真实模型样本；记录操作系统、架构、Python、内核提交和模型摘要。
+3. 校验固定依赖锁、模型锁和依赖/模型许可；依赖锁改变后重新执行真实识别。
+4. 对接宿主的安装验证、授权、取消、禁用、reload 与退出；按住说话必须证明未提交时没有模型请求。
+5. 完整范围验收后才创建标签和 Release、更新目录为 `released`。插件包可安装不等于 [#42](https://github.com/penhin/penhin-code/issues/42) 的端到端功能完成。
+
+旧方案要求的 `penhin-plugin.yaml`、`penhin-artifact.json` 和固定 HMAC 信任根不是当前 Penhin 的接口。若 `penhin-code` 仍需独立 Artifact 交付，应在该宿主的适配与发行流程中落实可信验证，不能在本包伪造官方签名来替代。

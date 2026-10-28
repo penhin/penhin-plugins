@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   check:
+    timeout-minutes: 15
     strategy:
       matrix:
         include:
@@ -28,3 +29,20 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Check plugin catalog and documentation
         run: python scripts/check_repository.py
+      - name: Install ASR service and test tools
+        run: python -m pip install -e "./plugins/asr[dev]"
+      - name: ASR batch, streaming and worker contracts
+        run: python -m pytest plugins/asr/tests -q -m "not integration and not model"
+      - name: Lint
+        run: python -m ruff check plugins/asr/src plugins/asr/tests
+      - name: Format
+        run: python -m ruff format --check plugins/asr/src plugins/asr/tests
+      - name: Build wheel and sdist
+        run: python -m build plugins/asr
+      - name: Check installed wheel outside checkout
+        shell: bash
+        run: |
+          python -m pip uninstall -y penhin-plugin-asr
+          python -m pip install --no-deps plugins/asr/dist/*.whl
+          cd "$RUNNER_TEMP"
+          python -c "from importlib.metadata import entry_points; from penhin_asr import AsrService, VoiceSubmission, ZipformerBackend; assert any(p.name == 'asr' for p in entry_points(group='penhin.plugins'))"

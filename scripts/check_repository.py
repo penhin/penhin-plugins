@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import re
 import sys
+import tomllib
 from urllib.parse import unquote, urlsplit
 
 
@@ -61,8 +62,17 @@ def check(root: Path) -> list[str]:
             errors.append(f"{plugin_id}: README.md is missing")
         else:
             documents.extend(plugin_root.rglob("*.md"))
-        if status == "released" and not (plugin_root / "penhin-plugin.yaml").is_file():
-            errors.append(f"{plugin_id}: a released plugin requires penhin-plugin.yaml")
+        if isinstance(status, str) and status in {"in-development", "released"}:
+            try:
+                package = tomllib.loads((plugin_root / "pyproject.toml").read_text(encoding="utf-8"))
+                project = package["project"]
+                if not project.get("name") or not project.get("version"):
+                    errors.append(f"{plugin_id}: package name and version are required")
+                reference = project.get("entry-points", {}).get("penhin.plugins", {}).get(plugin_id)
+                if not isinstance(reference, str) or ":" not in reference:
+                    errors.append(f"{plugin_id}: penhin.plugins factory entry point is required")
+            except (OSError, ValueError, KeyError, TypeError):
+                errors.append(f"{plugin_id}: readable Python package metadata is required")
 
     plugins_root = root / "plugins"
     if plugins_root.is_dir():

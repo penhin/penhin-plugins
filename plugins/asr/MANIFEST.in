@@ -1,0 +1,2 @@
+include requirements-zipformer.lock
+recursive-include tests *.py

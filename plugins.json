@@ -4,8 +4,8 @@
     {
       "id": "asr",
       "path": "plugins/asr",
-      "status": "planned",
-      "upstream_issue": "https://github.com/penhin/penhin-code/issues/25"
+      "status": "in-development",
+      "upstream_issue": "https://github.com/penhin/penhin-code/issues/42"
     },
     {
       "id": "media_understanding",

@@ -1,73 +1,172 @@
-# 官方 ASR 插件
+# ASR 语音转写
 
-状态：**规划中，尚未发布**。此目录目前用于明确交付边界；没有可安装的 ASR 实现、模型或签名发行制品。
+本地离线、中文优先的转写服务，使用 sherpa-onnx + 流式 Zipformer int8，同一模型支持整段和流式输入，并提供 Penhin Plugin 适配。当前版本 `0.1.0` 处于开发中，尚未发布。
 
-目标是让用户按住说话、松开结束录音，将最终转写放入可编辑输入框。用户检查、按需修改并主动提交后，文字才进入模型请求。
+宿主可提供两种交付方式：把转写文字显示到编辑框，供用户修改后提交；或者让用户直接提交语音，在后台转写后把文字发送给模型，界面保留语音消息。插件提供两种方式共用的识别与提交准备能力，不采集麦克风、不自行调用模型、不把转写放进系统提示词。产品需求来自 [penhin-code#42](https://github.com/penhin/penhin-code/issues/42)。
 
-上游 [penhin-code #25](https://github.com/penhin/penhin-code/issues/25) 是端到端验收的事实来源；通用平台约束见 [#19](https://github.com/penhin/penhin-code/issues/19)。本仓库的准备工作不代表 #25 已完成。
+## 安装与真实音频体验
 
-## 平台依赖
+以下命令在仓库根目录、已激活的 Python 3.12 虚拟环境中执行。服务包本身支持 Python 3.11+；原生后端可用平台受 sherpa-onnx / NumPy wheel 限制，已验证平台见[兼容性记录](../../docs/compatibility.md)。
 
-截至 2026-09-12，下列上游 Issue 均已关闭为 completed：
+```sh
+python -m pip install -e "./plugins/asr[zipformer,dev]"
+python -m penhin_asr.download --output .cache/asr/zipformer
+python -m penhin_asr .cache/asr/zipformer/test_wavs/0.wav --model-dir .cache/asr/zipformer
+# 逐行输出中间文本，最后一行 is_final 为 true；文件按计算速度处理。
+python -m penhin_asr .cache/asr/zipformer/test_wavs/0.wav --model-dir .cache/asr/zipformer --stream
+```
 
-| 依赖 | 已记录的实现提交 |
-| --- | --- |
-| [#21：Input Enricher 策略与 required 约束](https://github.com/penhin/penhin-code/issues/21) | [54234d6](https://github.com/penhin/penhin-code/commit/54234d6762aef92b65eb454e62be7ec3717ad5d2) |
-| [#22：宿主协议与 Attachment broker](https://github.com/penhin/penhin-code/issues/22) | [ff712cb](https://github.com/penhin/penhin-code/commit/ff712cb77a081da7486ef3ea86e7c9298c99d323) |
-| [#23：制品验证、授权与项目策略](https://github.com/penhin/penhin-code/issues/23) | [27cdac3](https://github.com/penhin/penhin-code/commit/27cdac3e13328a969c36d1f1902afab0535dd1de) |
+固定模型为 `sherpa-onnx-streaming-zipformer-zh-int8-2025-06-30`。压缩包约 133 MB，三个 ONNX 文件合计约 167 MB（文件大小，不是内存占用）。下载和解包均校验固定 SHA-256；进程启动时再次校验模型和词表，运行期不联网。可用 `--archive /path/to/model.tar.bz2` 从已下载压缩包离线准备，目标目录必须不存在。锁文件随包交付：[model-lock.json](src/penhin_asr/model-lock.json)。
 
-这些状态来自 Issue 及其完成评论。开始实现和发布前，仍需对选定的 penhin-code 版本核查源码、可用接口和合同测试，确定最低兼容版本；Issue 关闭不等于 ASR 已具备发布条件。
+## 宿主直接调用
 
-## 职责边界
+```python
+from pathlib import Path
+from penhin_asr import AsrService, AudioInput, ZipformerBackend
 
-| penhin-code 核心 | 本仓库的 ASR 插件 |
-| --- | --- |
-| 响应显式按住／松开操作，管理麦克风采集 | 接收核心传入的音频 Attachment Handle |
-| 创建并管理音频 Attachment 的生命周期 | 通过 broker 读取音频，执行转写 |
-| 调度 Invocation，执行项目授权与 required 策略 | 声明能力与适用范围，返回版本化结果、进度和诊断 |
-| 展示部分结果，将最终转写写入编辑器 | 配合取消，释放插件持有的推理资源 |
-| 管理禁用、reload、会话关闭及宿主退出 | 维护实现、依赖锁、模型锁及独立发行制品 |
-| 在用户主动提交后构造模型请求 | 维护插件合同测试与发布说明 |
+async def transcribe_recording(wav_bytes: bytes) -> str:
+    async with AsrService(ZipformerBackend(Path(".cache/asr/zipformer"))) as service:
+        result = await service.transcribe(AudioInput(wav_bytes, source_id="recording-1"))
+        return result.text  # 宿主回填输入框，等待用户编辑和提交
+```
 
-麦克风是核心管理的用户资源。插件通过不透明 Handle 获取已录制音频，不后台监听设备，也不接收任意宿主文件路径。部分转写仅用于 UI 展示；最终结果由核心映射到编辑器，插件不能借此直接修改模型请求或自动提交。
+`AsrService` 绑定一个事件循环，可在同一循环中反复使用；关闭后不能重开。每个服务同一时间只处理一个请求，忙时抛出 `AsrBusy`。不同会话需要独立服务，宿主再限制总并发。
 
-## 实现前需要确定
+输入为单声道、16-bit little-endian PCM WAV，采样率 8–48 kHz；默认最大 10 MiB、120 秒，可用 `AudioLimits` 缩小。宿主负责将 MP3、浏览器 WebM 等录音转换为该合同；首版不隐式安装或调用 FFmpeg。空音频拒绝，无可识别语音时可以返回空字符串。
 
-- **引擎与模型**：选定 ASR 后端、模型版本、语言支持、许可证、再分发条件和本地推理资源需求。
-- **平台**：明确支持的操作系统、架构、CPU／GPU 方案，以及真实按住／松开事件的输入方式。
-- **音频合同**：与核心约定 MIME、容器、编码、采样率、声道、时长／大小上限、空录音和不支持格式的诊断。
-- **调用与结果合同**：核对事件名、贡献类型、协议／schema 版本、部分及最终结果表示、取消标识、超时与错误码。
-- **生命周期**：明确禁用、reload、关闭会话后的资源回收，以及核心拒收过期 Invocation 结果的规则。
-- **发行身份**：确定插件 ID、制品格式、兼容版本、官方发布者信任根与签名流程；签名私钥留在受控发布环境。
+整段结果包含 `text`、`source_id`、`duration_seconds`、`is_final: true`。整段输入在内部逐块送入同一个流式解码器，按计算速度处理，结束时补齐右侧上下文并输出最终文本。结果仍为不可信用户数据。
 
-这些选项尚未确定。本目录没有用占位 manifest、假转写器或未选定的依赖来承诺实现合同。
+## 流式调用
 
-## 计划中的目录
+```python
+from pathlib import Path
+from penhin_asr import AsrService, ZipformerBackend
 
-以下是后续实现需要的内容，**目前尚未创建**；具体文件名以核实后的上游规范为准。
+async def transcribe_live(pcm_chunks, show_text):
+    # pcm_chunks 是宿主管理的异步音频源，产生 PCM16 字节块；不包含 WAV 头。
+    async with AsrService(ZipformerBackend(Path(".cache/asr/zipformer"))) as service:
+        async with service.stream(
+            pcm_chunks, sample_rate=16000, source_id="recording-1"
+        ) as updates:
+            async for result in updates:
+                show_text(result.text, is_final=result.is_final)
+```
 
-| 内容 | 作用 |
-| --- | --- |
-| `src/` | 宿主入口、broker 适配及 ASR 实现 |
-| `tests/` | 协议、结果、失败与取消合同测试 |
-| 插件 manifest | 插件身份、贡献、能力及兼容声明 |
-| 依赖锁 | 依赖版本与完整性信息 |
-| 模型锁 | 模型资产版本、摘要、来源及许可证 |
-| 发行构建配置 | 生成完整性记录、签名制品和验证所需元数据 |
+- 采样率在整个会话中固定，支持 8–48 kHz；单声道、16-bit little-endian PCM。每块必须非空、偶数字节，最多 1 秒；建议宿主送入 20–320 ms 的块。累计仍受 10 MiB / 120 秒限制。
+- 每条结果是**当前全文快照**，宿主应替换上一条文本，不能拼接；中间结果可以为空或与上一条相同，也允许修订。`duration_seconds` 只计算真实输入，不含结尾补零。
+- 输入源结束表示停止录音，触发解码收尾；只在最后返回一条 `is_final=True`。会话不按静音自动切句，宿主需要结束当前音频源才能确定最终结果。
+- 必须使用 `async with`。提前 `break`、异常或取消会回收工作进程，且不会伪造最终结果。服务关闭时也能中止等待输入或等待消费的流。音频源及其采集设备由宿主负责关闭。
+- 内部只缓存一条待消费结果，消费慢时暂停读取后续输入。宿主的麦克风队列也应有容量上限；不能在这里无限积压录音。
 
-## 端到端验收清单
+流式用于宿主直接更新输入框；Agent 的 `asr__transcribe` 工具仍接收已有附件并返回最终结果。
 
-以下检查需要核心与插件联调；插件单元测试通过不足以关闭 #25。
+## 可选文字展示与直接语音交付
 
-- [ ] 只有显式用户操作可以启动录音；空闲、插件激活和后台运行均不会开启麦克风。
-- [ ] 松开操作结束一次录音，生成一个音频 Attachment，并通过受管宿主协议调用插件。
-- [ ] 部分转写只展示在 UI；最终转写进入可编辑输入框，等待用户检查和主动提交。
-- [ ] 转写后修改文字再提交，模型收到修改后的内容；主动提交前模型调用次数为零。
-- [ ] 识别失败有可理解诊断，不自动发送部分结果；其他插件及不受匹配策略约束的输入仍可使用。
-- [ ] 在录音及识别阶段分别验证取消；资源释放后，迟到结果不会重新写入输入框。
-- [ ] 插件禁用、reload 和会话关闭均停止相关工作；无关插件仍可使用。
-- [ ] 仅项目策略可将合格贡献设为 required；失败只阻塞匹配提交，并验证明确诊断及审计绕过。
-- [ ] 官方制品验证完整性树、依赖锁、模型锁、发布者签名及项目授权；运行过程中不自动下载代码或模型。
-- [ ] 使用选定平台上的真实音频完成最小转写验证，并记录核心版本、插件版本及制品摘要。
+“是否显示转写文字”和“如何输入音频”是独立选择：整段或流式识别都可以用于以下两种交付方式。
 
-发布时应给出安装与验证方法、支持平台、模型许可证和上述验收证据，再将本页状态更新为已发布。
+| 交付方式 | 用户看到的内容 | 宿主行为 |
+| --- | --- | --- |
+| 转为文字 | 可编辑的转写文字 | 调用 `transcribe()` / `stream()`，用户编辑并提交后发送文字 |
+| 直接语音 | 语音消息、时长与播放入口 | 用户提交语音后调用 `prepare_voice()`，后台把最终文字发送给模型，无需额外文字确认 |
+
+```python
+from penhin import Agent, PluginRuntime, load_plugin
+
+async def deliver_voice(service, model, session, source_id, read_authorized_audio, cancellation):
+    async with PluginRuntime() as runtime:
+        await runtime.activate(load_plugin("asr", service=service))
+        # 此方式只注册生命周期，不向模型暴露 ASR 工具。
+        # read_authorized_audio(source_id) 是宿主绑定当前会话的异步授权读取函数，
+        # 返回 AudioInput；读入限制不超过 service.limits.max_bytes。
+        prepared = await service.prepare_voice(
+            source_id, read_audio=read_authorized_audio, cancellation=cancellation,
+        )
+        # 展示数据只有 type=audio、source_id、duration_seconds，不含转写文字。
+        display_message = prepared.as_display_message()
+        agent = Agent(model, plugins=runtime)
+        # 标准 Penhin 文本入口；转写作为 user 内容进入内部执行历史。
+        result = await agent.run(session, prepared.model_text, cancellation=cancellation)
+        return display_message, result
+```
+
+上例在退出时关闭服务；需要跨提交复用时，由宿主把 `PluginRuntime` 的生命周期放在外层。示例不替宿主绘制界面或存储音频。`VoiceSubmission` 是提交准备结果，不是 Penhin 内建消息类型；`as_display_message()` 供宿主自己的消息视图使用，不能把这个 audio 字典直接传给当前 `Agent.run()`。原始录音、播放地址、业务消息 ID、Session/轮次关联以及“发送中 / 失败 / 完成”的状态由宿主管理。语音界面应使用自己的展示数据，不直接渲染内部 Session 的转写文字。
+
+`prepare_voice()` 将附件读取和识别纳入同一个超时、取消和并发占用范围，并验证返回的附件 ID。读入失败、ID 不匹配、格式错误、超限、取消或无可识别语音（`no_speech`）均抛错，宿主必须停止这次提交，不能用空文字继续调用模型。它只准备一次，不在 `transform_context` 中每轮重跑识别。ASR 成功也不代表 Agent 已完成；模型执行中断后应根据 Session 状态续跑已有轮次，不能再次追加相同语音文字。
+
+如果录音期间已经进行了流式识别，可直接复用最终结果：
+
+```python
+from penhin_asr import VoiceSubmission
+
+# final_transcript 必须来自同一条已授权录音，且 is_final=True。
+prepared = VoiceSubmission.from_transcript(final_transcript)
+# prepared.model_text 供模型；prepared.as_display_message() 供语音界面。
+```
+
+该转换拒绝中间结果和空文本，不重复识别。宿主只在用户已选择直接交付语音并执行发送动作后提交；流式中间结果不能触发 Agent。转写属于用户输入，不能提升为系统指令。
+
+后续 TTS 接在模型回复之后：`用户语音 → ASR → 模型文字请求 / 回复 → TTS → 回复语音`。输入是否显示文字、回复是否播放语音由宿主分别选择；ASR 不强制绑定 TTS，本轮未实现 TTS、语音 UI 或宿主设置持久化，也未修改 Penhin 内核。
+
+## 接入 Penhin
+
+先安装匹配的 Penhin 内核（当前为私有源码仓库，不能假定 PyPI 可用）：
+
+```sh
+python -m pip install ../penhin
+```
+
+```python
+from pathlib import Path
+from penhin import Agent, PluginRuntime, load_plugin
+from penhin_asr import AsrService, AudioInput, ZipformerBackend
+
+async def use_asr(model, attachments, session):
+    service = AsrService(ZipformerBackend(Path(".cache/asr/zipformer")))
+
+    async def read_audio(attachment_id, context):
+        # 宿主检查 session/project 权限、过期和撤销，并限制读取量。
+        data = await attachments.read_authorized_wav(
+            attachment_id, session_id=context.session_id,
+            invocation_id=context.invocation_id, max_bytes=service.limits.max_bytes,
+        )
+        return AudioInput(data, attachment_id)
+
+    plugin = load_plugin("asr", service=service, read_audio=read_audio)
+    async with PluginRuntime() as runtime:
+        await runtime.activate(plugin)
+        agent = Agent(model, plugins=runtime)
+        # 模型可调用 asr__transcribe(attachment_id)，参数不接受宿主路径。
+        return await agent.run(session, "转写指定的音频附件")
+```
+
+`attachments.read_authorized_wav` 是示意的宿主接口，不是 Penhin 内置 API。工厂不传 `read_audio` 时只注册生命周期，适合直接语音交付；显式传入才注册 `asr__transcribe`。工具的 `read_audio` 必须为异步函数，收到真实 `ToolContext`，并返回 ID 一致的 `AudioInput`。插件不会替宿主判断附件权限。也可通过 `load_plugin("penhin_asr:create_plugin", ...)` 加载。
+
+工厂默认 `close_service=True`，停用时关闭传入服务并取消直接发起的在途识别。仅在宿主明确管理共享服务生命周期时设置 `False`。Penhin 运行中禁止插件热停用：先取消并等 Agent 返回，再 deactivate；重新启用使用新服务。直接转写并不需要调用 Agent 或读取模型凭据。
+
+## 取消、超时与错误
+
+`task.cancel()`、`await service.aclose()`，以及 `transcribe(..., cancellation=token)` / `stream(..., cancellation=token)` 均可取消；token 只需提供布尔属性 `cancelled`，可使用 Penhin 的 `CancellationToken`。超时默认 60 秒：整段调用限制总执行时间；流式调用限制每次等待下一条解码结果的时间（包含等待输入，首条包含模型校验和加载），不把正常录音的总时长限制为 60 秒。
+
+每次整段调用或流式会话创建一个专用 CPU 工作进程，在该会话内保留模型和解码状态，完成或取消后退出并回收。不会为每个音频块重新加载模型。关闭期间保留占用，拒绝迟到结果；取消传播为 `asyncio.CancelledError`，超时为 `AsrTimeout`。这用于中断原生推理，不是 OS 沙箱。不同录音会话仍需重新加载，尚未做跨会话预热。
+
+其他错误携带稳定 `AsrError.code`，例如 `invalid_wav`、`audio_too_large`、`model_missing`、`model_mismatch`、`backend_not_installed`。默认错误与日志不包含音频、转写内容或宿主路径；CLI 的 JSON 转写输出是用户显式请求的结果。
+
+## 开发验证
+
+```sh
+python -m pytest plugins/asr/tests -q
+python -m ruff check plugins/asr/src plugins/asr/tests
+python -m ruff format --check plugins/asr/src plugins/asr/tests
+python -m build plugins/asr
+python scripts/check_repository.py
+```
+
+真实模型测试需设置 `PENHIN_ASR_MODEL_DIR` 为模型目录，再运行 `python -m pytest plugins/asr/tests/test_model.py -q`。未设置会明确跳过；未安装 Penhin 时集成模块也明确跳过。完整验收必须安装内核并执行它们，不能用基础 CI 的绿色替代。[发行约定](../../docs/releases.md)说明包、依赖与宿主验收的边界。
+
+后续宿主工作包括真实按住录音、松开/取消手势、Attachment 生命周期、输入框编辑提交以及安装授权。当前服务与适配完成不意味着整个 #42 已完成。
+
+## 模型与依赖来源
+
+- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)：Apache-2.0；使用其[流式模型处理文件示例](https://github.com/k2-fsa/sherpa-onnx/blob/master/python-api-examples/online-decode-files.py)中的 OnlineRecognizer 接口。
+- [Zipformer 中文模型](https://k2-fsa.github.io/sherpa/onnx/pretrained_models/online-transducer/zipformer-transducer-models.html)：官方发布包没有单独 LICENSE；其 README 指向的[上游模型卡](https://huggingface.co/yuekai/icefall-asr-multi-zh-hans-zipformer-large)本次返回 401，权重许可尚未核实，不能从运行时代码的 Apache-2.0 或本仓库 MIT 推断。下载器保留上游 README 与来源记录；权重和样本不提交、不打入 wheel，分发权重前需另行确认许可。
+- NumPy：BSD-3-Clause。安装所需依赖版本在 [pyproject.toml](pyproject.toml) 固定；完整后端依赖及摘要见 [requirements-zipformer.lock](requirements-zipformer.lock)。
